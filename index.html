@@ -699,9 +699,10 @@ main{
     <div class="field">
       <label class="field-label" for="model-select">Model</label>
       <select class="field-select" id="model-select">
-        <option value="gemini-1.5-flash">Gemini 1.5 Flash (Fast · Free)</option>
-        <option value="gemini-1.5-pro">Gemini 1.5 Pro (Powerful)</option>
-        <option value="gemini-2.0-flash">Gemini 2.0 Flash (Latest)</option>
+        <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash-Lite — Fastest · 1,000 req/day free ⭐</option>
+        <option value="gemini-2.5-flash" selected>Gemini 2.5 Flash — Balanced · 250 req/day free</option>
+        <option value="gemini-2.5-pro">Gemini 2.5 Pro — Most Powerful · 100 req/day free</option>
+        <option value="gemini-2.0-flash">Gemini 2.0 Flash — Previous Gen · 5 RPM free</option>
       </select>
     </div>
 
@@ -742,7 +743,7 @@ const state = {
   messages: [],      // {role, content, time, sources?}
   settings: {
     apiKey: '',
-    model: 'gemini-1.5-flash',
+    model: 'gemini-2.5-flash',
     temperature: '0.5',
     systemPrompt: ''
   },
@@ -1111,10 +1112,30 @@ async function sendMessage() {
     updateStats();
   } catch(err) {
     hideTyping();
-    const errMsg = { role:'ai', content:`Sorry, something went wrong: **${err.message}**\n\nPlease check your API key in Settings.`, time: now() };
+    const friendly = err.message
+      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\n/g, '<br>');
+    const errMsg = {
+      role:'ai',
+      content: `⚠️ ${err.message}`,
+      time: now()
+    };
     state.messages.push(errMsg);
-    renderOneBubble(errMsg);
-    toast(err.message, 'error', 5000);
+    // Render manually with HTML so bold works
+    const msgs = $('messages');
+    const el = document.createElement('div');
+    el.className = 'msg ai';
+    el.innerHTML = `
+      <div class="msg-avatar">⚠️</div>
+      <div class="msg-body">
+        <div class="msg-bubble" style="border-color:rgba(248,113,113,0.25);background:rgba(248,113,113,0.06)">
+          ${friendly}
+        </div>
+        <div class="msg-time">${now()}</div>
+      </div>`;
+    msgs.appendChild(el);
+    msgs.scrollTop = msgs.scrollHeight;
+    toast('Request failed — see chat for details', 'error', 4000);
   }
 
   state.isThinking = false;
@@ -1123,27 +1144,23 @@ async function sendMessage() {
 }
 
 /* ═══════════════════════════════════════════
-   GEMINI API
+   GEMINI API  — with auto-retry on rate limit
 ═══════════════════════════════════════════ */
-async function callGemini(question) {
+async function callGemini(question, retryCount = 0) {
   const { apiKey, model, temperature, systemPrompt } = state.settings;
   const doc = state.activeDoc;
 
-  // Build context — trim document to fit in context window
   const docContext = doc.content.slice(0, 80000);
 
   const sysPrompt = systemPrompt ||
     `You are AskMyDocs, an expert document assistant. You answer questions based ONLY on the provided document content. Be concise, accurate, and helpful. If the answer isn't in the document, say so clearly. Format your responses with markdown when useful (bold key terms, use bullet points for lists).`;
 
   // Build conversation history for multi-turn
-  const historyParts = [];
-  const recent = state.messages.slice(-8); // last 4 turns
-  for (const m of recent) {
-    historyParts.push({
-      role: m.role === 'user' ? 'user' : 'model',
-      parts: [{ text: m.content }]
-    });
-  }
+  const recent = state.messages.slice(-8);
+  const historyParts = recent.map(m => ({
+    role: m.role === 'user' ? 'user' : 'model',
+    parts: [{ text: m.content }]
+  }));
 
   const payload = {
     system_instruction: { parts: [{ text: sysPrompt }] },
@@ -1152,7 +1169,7 @@ async function callGemini(question) {
         role: 'user',
         parts: [{ text: `DOCUMENT CONTENT:\n\n${docContext}\n\n---\n\nQUESTION: ${question}` }]
       },
-      { role: 'model', parts: [{ text: 'I have read the document. I will answer your question based on its content.' }] },
+      { role: 'model', parts: [{ text: 'I have read the document. I will answer based on its content.' }] },
       ...historyParts.slice(-6),
       { role: 'user', parts: [{ text: question }] }
     ],
@@ -1165,15 +1182,63 @@ async function callGemini(question) {
   };
 
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
-  });
+
+  let res;
+  try {
+    res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+  } catch(netErr) {
+    throw new Error('Network error — check your internet connection.');
+  }
+
+  // Rate limit: auto-retry once with backoff
+  if (res.status === 429) {
+    const errBody = await res.json().catch(() => ({}));
+    // Extract retry delay from error message if present
+    const retryMatch = JSON.stringify(errBody).match(/retry in ([0-9.]+)s/i);
+    const waitSec = retryMatch ? Math.ceil(parseFloat(retryMatch[1])) + 1 : 12;
+
+    if (retryCount < 2) {
+      // Show countdown toast
+      toast(`Rate limit hit — retrying in ${waitSec}s…`, 'info', waitSec * 1000);
+      // Update typing bubble text
+      const tb = $('typing-bubble');
+      if (tb) {
+        const b = tb.querySelector('.msg-bubble');
+        if (b) b.innerHTML = `<span style="font-size:13px;color:var(--text2)">⏳ Rate limit — retrying in ${waitSec}s…</span>`;
+      }
+      await new Promise(r => setTimeout(r, waitSec * 1000));
+      return callGemini(question, retryCount + 1);
+    }
+
+    // After 2 retries, give helpful message
+    const modelLimits = {
+      'gemini-2.5-flash-lite': '1,000 req/day · 15 RPM',
+      'gemini-2.5-flash':      '250 req/day · 10 RPM',
+      'gemini-2.5-pro':        '100 req/day · 5 RPM',
+      'gemini-2.0-flash':      '200 req/day · 5 RPM',
+    };
+    const limit = modelLimits[model] || 'limited';
+    throw new Error(`Rate limit exceeded for ${model} (free tier: ${limit}). Try switching to **Gemini 2.5 Flash-Lite** in Settings — it has the highest free quota (1,000/day).`);
+  }
+
+  if (res.status === 400) {
+    const errBody = await res.json().catch(() => ({}));
+    const msg = errBody?.error?.message || 'Bad request';
+    if (msg.includes('API_KEY')) throw new Error('Invalid API key. Please check your key in Settings.');
+    throw new Error(`Bad request: ${msg}`);
+  }
+
+  if (res.status === 403) {
+    throw new Error('API key does not have permission for this model. Try a different model in Settings.');
+  }
 
   if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    const msg = err?.error?.message || `API error ${res.status}`;
+    const errBody = await res.json().catch(() => ({}));
+    const msg = errBody?.error?.message || `API error ${res.status}`;
     throw new Error(msg);
   }
 
@@ -1211,9 +1276,15 @@ function saveSettings() {
 function updateApiStatus() {
   const dot = $('api-dot');
   const lbl = $('api-label');
+  const modelLabels = {
+    'gemini-2.5-flash-lite': '2.5 Flash-Lite',
+    'gemini-2.5-flash':      '2.5 Flash',
+    'gemini-2.5-pro':        '2.5 Pro',
+    'gemini-2.0-flash':      '2.0 Flash',
+  };
   if (state.settings.apiKey) {
     dot.className = 'api-dot ok';
-    lbl.textContent = state.settings.model.replace('gemini-','').replace('-',' ');
+    lbl.textContent = modelLabels[state.settings.model] || state.settings.model;
   } else {
     dot.className = 'api-dot bad';
     lbl.textContent = 'No API Key';
