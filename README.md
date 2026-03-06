@@ -26,7 +26,7 @@
 
 <br/>
 
-**[🚀 Live Demo]([https://host-askmydocs.netlify.app/) · [📱 Install as App](#-install-as-android-app) · [🐛 Report Bug](https://github.com/DragAditya/AskMyDocs/issues) · [✨ Request Feature](https://github.com/DragAditya/AskMyDocs/issues)**
+**[🚀 Live Demo](https://host-askmydocs.netlify.app/) · [📱 Install as App](#-install-as-android-app) · [🐛 Report Bug](https://github.com/DragAditya/AskMyDocs/issues) · [✨ Request Feature](https://github.com/DragAditya/AskMyDocs/issues)**
 
 <br/>
 
