@@ -40,7 +40,7 @@
 
 | Dark Theme — Document Chat | File Upload & Document Manager |
 |:---:|:---:|
-| ![Chat UI](screenshots/chat-ui.jpg)) | ![Upload UI](screenshots/uplode-ui.jpg)) |
+|![Chat UI](Screenshots/chat-ui.jpg) | ![Upload UI](Screenshots/uplode-ui.jpg) |
 
 </div>
 
