@@ -40,7 +40,7 @@
 
 | Dark Theme — Document Chat | File Upload & Document Manager |
 |:---:|:---:|
-| ![Chat UI](https://ibb.co/hFdYBLg0) | ![Upload UI]([https://via.placeholder.com/480x320/080b14/7b6ff0?text=Upload+%26+Manage](https://image2url.com/r2/default/images/1772768468771-7d118a94-3c0a-4b2f-9f9f-7aa77fafd4cd.jpg)) |
+| ![Chat UI]([https://ibb.co/hFdYBLg0](https://i.ibb.co/fdNDkqXJ/Screenshot-20260306-091004.jpg)) | ![Upload UI]([https://via.placeholder.com/480x320/080b14/7b6ff0?text=Upload+%26+Manage](https://image2url.com/r2/default/images/1772768468771-7d118a94-3c0a-4b2f-9f9f-7aa77fafd4cd.jpg)) |
 
 </div>
 
